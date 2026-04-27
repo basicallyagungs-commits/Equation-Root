@@ -1,0 +1,306 @@
+#include <iostream>
+#include <string>
+#include <cmath>
+#include <cctype>
+#include <iomanip>
+#include <algorithm>
+#include <stdexcept>
+
+using namespace std;
+
+class MathParser {
+private:
+    string s;
+    size_t pos;
+    double xVal;
+
+    void skipSpaces() {
+        while (pos < s.size() && isspace(static_cast<unsigned char>(s[pos]))) {
+            pos++;
+        }
+    }
+
+    bool match(char c) {
+        skipSpaces();
+        if (pos < s.size() && s[pos] == c) {
+            pos++;
+            return true;
+        }
+        return false;
+    }
+
+    double parseNumber() {
+        skipSpaces();
+        size_t start = pos;
+        bool hasDot = false;
+
+        while (pos < s.size() && (isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.')) {
+            if (s[pos] == '.') {
+                if (hasDot) break;
+                hasDot = true;
+            }
+            pos++;
+        }
+
+        if (start == pos) {
+            return 0;
+        }
+
+        string numStr = s.substr(start, pos - start);
+        try {
+            return stod(numStr);
+        } catch (...) {
+            return 0;
+        }
+    }
+
+    double parsePrimary() {
+        skipSpaces();
+
+        if (match('(')) {
+            double val = parseExpression();
+            if (!match(')')) {
+                cerr << "Error: Kurung tutup tidak ditemukan" << endl;
+            }
+            return val;
+        }
+
+        // Cek fungsi atau variabel
+        if (pos < s.size() && isalpha(static_cast<unsigned char>(s[pos]))) {
+            size_t start = pos;
+            while (pos < s.size() && isalpha(static_cast<unsigned char>(s[pos]))) {
+                pos++;
+            }
+            string name = s.substr(start, pos - start);
+
+            if (match('(')) {
+                double arg = parseExpression();
+                if (!match(')')) {
+                    cerr << "Error: Kurung tutup tidak ditemukan setelah fungsi" << endl;
+                }
+
+                if (name == "sin")   return sin(arg);
+                if (name == "cos")   return cos(arg);
+                if (name == "tan")   return tan(arg);
+                if (name == "log" || name == "ln") return log(arg);
+                if (name == "log10") return log10(arg);
+                if (name == "exp")   return exp(arg);
+                if (name == "sqrt")  return sqrt(arg);
+                if (name == "abs")   return abs(arg);
+
+                cerr << "Error: Fungsi tidak dikenal: " << name << endl;
+                return 0;
+            } else {
+                if (name == "x" || name == "X") {
+                    return xVal;
+                }
+                cerr << "Error: Variabel tidak dikenal: " << name << endl;
+                return 0;
+            }
+        }
+
+        if (pos < s.size() && (isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.')) {
+            return parseNumber();
+        }
+
+        return 0;
+    }
+
+    double parsePower() {
+        double left = parsePrimary();
+        while (true) {
+            if (match('^')) {
+                double right = parsePower(); // Right associative
+                left = pow(left, right);
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    double parseUnary() {
+        if (match('+')) {
+            return parseUnary();
+        }
+        if (match('-')) {
+            return -parseUnary();
+        }
+        return parsePower();
+    }
+
+    double parseTerm() {
+        double left = parseUnary();
+        while (true) {
+            if (match('*')) {
+                double right = parseUnary();
+                left *= right;
+            } else if (match('/')) {
+                double right = parseUnary();
+                if (right != 0.0) {
+                    left /= right;
+                } else {
+                    cerr << "Error: Pembagian dengan nol" << endl;
+                    return 0;
+                }
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    double parseExpression() {
+        double left = parseTerm();
+        while (true) {
+            if (match('+')) {
+                double right = parseTerm();
+                left += right;
+            } else if (match('-')) {
+                double right = parseTerm();
+                left -= right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+public:
+    double evaluate(const string& expr, double xValue) {
+        s = expr;
+        // Ganti koma dengan titik untuk angka desimal
+        for (size_t i = 0; i < s.size(); i++) {
+            if (s[i] == ',') s[i] = '.';
+        }
+        pos = 0;
+        xVal = xValue;
+        return parseExpression();
+    }
+};
+
+int main() {
+    MathParser parser;
+    string fungsi;
+    string galatStr;
+    double x1, x2, galat;
+
+    cout << "============================================================" << endl;
+    cout << "               PROGRAM METODE BISEKSI                       " << endl;
+    cout << "============================================================" << endl;
+    cout << endl;
+    cout << "Petunjuk penulisan fungsi:" << endl;
+    cout << "  - Gunakan 'x' sebagai variabel" << endl;
+    cout << "  - Gunakan '*' untuk perkalian (contoh: 2*x, x*x)" << endl;
+    cout << "  - Gunakan '^' untuk pangkat (contoh: x^2, x^3)" << endl;
+    cout << "  - Gunakan tanda kurung untuk grouping (contoh: (x+1)*(x-2))" << endl;
+    cout << "  - Fungsi yang didukung: sin, cos, tan, log, ln, exp, sqrt" << endl;
+    cout << "  - Contoh: x^3 - 2*x + 1" << endl;
+    cout << "  - Contoh: sin(x) + x^2 - 4" << endl;
+    cout << endl;
+
+    cout << "Fungsi : ";
+    getline(cin, fungsi);
+
+    cout << "Galat  : 0,";
+    cin >> galatStr;
+
+    // Proses input galat
+    replace(galatStr.begin(), galatStr.end(), ',', '.');
+    if (galatStr.empty()) {
+        galat = 0.0;
+    } else {
+        try {
+            galat = stod("0." + galatStr);
+        } catch (...) {
+            galat = 0.001; // default
+        }
+    }
+
+    cout << "Masukkan x1: ";
+    cin >> x1;
+    cout << "Masukkan x2: ";
+    cin >> x2;
+
+    double f1 = parser.evaluate(fungsi, x1);
+    double f2 = parser.evaluate(fungsi, x2);
+
+    cout << fixed << setprecision(6);
+    cout << endl;
+    cout << "f(" << x1 << ") = " << f1 << endl;
+    cout << "f(" << x2 << ") = " << f2 << endl;
+    cout << endl;
+
+    // Cek perubahan tanda
+    if (f1 * f2 > 0) {
+        cout << "tidak ada perubahan titik" << endl;
+        return 0;
+    }
+
+    if (f1 == 0.0) {
+        cout << "Akar ditemukan tepat di x = " << x1 << endl;
+        return 0;
+    }
+
+    if (f2 == 0.0) {
+        cout << "Akar ditemukan tepat di x = " << x2 << endl;
+        return 0;
+    }
+
+    // Algoritma Biseksi
+    double a = x1, b = x2;
+    double fa = f1, fb = f2;
+    double xt = 0.0, fxt = 0.0;
+    int iterasi = 0;
+    double error = 0.0;
+
+    cout << "-----------------------------------------------------------------------------------------" << endl;
+    cout << setw(6) << "Iter"
+         << setw(18) << "x1"
+         << setw(18) << "x2"
+         << setw(18) << "xt"
+         << setw(18) << "f(xt)"
+         << setw(18) << "Galat" << endl;
+    cout << "-----------------------------------------------------------------------------------------" << endl;
+
+    do {
+        xt = (a + b) / 2.0;
+        fxt = parser.evaluate(fungsi, xt);
+        error = abs(b - a) / 2.0;
+
+        cout << setw(6) << iterasi + 1
+             << setw(18) << a
+             << setw(18) << b
+             << setw(18) << xt
+             << setw(18) << fxt
+             << setw(18) << error << endl;
+
+        if (fa * fxt < 0) {
+            b = xt;
+            fb = fxt;
+        } else {
+            a = xt;
+            fa = fxt;
+        }
+
+        iterasi++;
+
+        if (iterasi > 1000) {
+            cout << "-----------------------------------------------------------------------------------------" << endl;
+            cout << "Iterasi maksimum (1000) tercapai!" << endl;
+            break;
+        }
+
+    } while (abs(fxt) > galat && error > galat);
+
+    cout << "-----------------------------------------------------------------------------------------" << endl;
+    cout << endl;
+    cout << "Akar yang ditemukan   : x = " << xt << endl;
+    cout << "Nilai f(x)            : " << fxt << endl;
+    cout << "Galat akhir           : " << error << endl;
+    cout << "Jumlah iterasi        : " << iterasi << endl;
+    cout << endl;
+
+    return 0;
+}
+
